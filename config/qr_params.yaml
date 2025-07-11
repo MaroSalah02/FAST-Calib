@@ -12,12 +12,12 @@ fast_calib:
     p2: -0.000350205468789575
 
     # Calibration target parameters
-    marker_size: 0.20 # ArUco marker size (our test data uses 0.16m; adjust to match your marker size)
-    delta_width_qr_center: 0.55 # Half the distance between the centers of two markers in the horizontal direction
-    delta_height_qr_center: 0.35 # Half the distance between the centers of two markers in the vertical direction
-    delta_width_circles: 0.5 # Distance between the centers of two circles in the horizontal direction
-    delta_height_circles: 0.4 # Distance between the centers of two circles in the vertical direction
-    circle_radius: 0.12 # Radius of the circle
+    marker_size: 0.16 # ArUco marker size (our test data uses 0.16m; adjust to match your marker size)
+    delta_width_qr_center: 0.47 # Half the distance between the centers of two markers in the horizontal direction
+    delta_height_qr_center: 0.27 # Half the distance between the centers of two markers in the vertical direction
+    delta_width_circles: 0.4 # Distance between the centers of two circles in the horizontal direction
+    delta_height_circles: 0.3 # Distance between the centers of two circles in the vertical direction
+    circle_radius: 0.10 # Radius of the circle
 
     # Distance filter
     x_min: 1.5
@@ -27,7 +27,7 @@ fast_calib:
     z_min: -0.5 # avia and mid360: -0.5 ouster: -0.8
     z_max: 2.0
 
-    lidar_topic: "/livox/lidar" # /ouster/points /livox/lidar
+    lidar_topic: "/livox/points" # /ouster/points /livox/lidar
     bag_path: "/home/parallels/bag_image/22"
     image_path: "/home/parallels/bag_image/22.png"
 
