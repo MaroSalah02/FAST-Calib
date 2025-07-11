@@ -8,15 +8,18 @@ which is included as part of this source code package.
 #ifndef DATA_PREPROCESS_HPP
 #define DATA_PREPROCESS_HPP
 
-#include "CustomMsg.h"
+// #include "CustomMsg.h"  // Comment this out for now
 #include <Eigen/Core>
 #include <pcl/io/pcd_io.h>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 #include <pcl_conversions/pcl_conversions.h>
-#include <ros/ros.h>
-#include <rosbag/bag.h>
-#include <rosbag/view.h>
+#include <rclcpp/rclcpp.hpp>
+#include <rosbag2_cpp/readers/sequential_reader.hpp>
+#include <rosbag2_cpp/converter_interfaces/serialization_format_converter.hpp>
+#include <rosbag2_storage/storage_options.hpp>
+#include <sensor_msgs/msg/point_cloud2.hpp>
+#include <rclcpp/serialization.hpp>
 
 using namespace std;
 using namespace cv;
@@ -25,7 +28,6 @@ class DataPreprocess
 {
 public:
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_input_;
-
     cv::Mat img_input_;
 
     DataPreprocess(Params &params)
@@ -39,59 +41,63 @@ public:
         if (img_input_.empty()) 
         {
             std::string msg = "Loading the image " + image_path + " failed";
-            ROS_ERROR_STREAM(msg.c_str());
+            RCLCPP_ERROR(rclcpp::get_logger("data_preprocess"), "%s", msg.c_str());
             return;
         }
 
+        // Check if bag file exists
         std::fstream file_;
         file_.open(bag_path, ios::in);
         if (!file_) 
         {
             std::string msg = "Loading the rosbag " + bag_path + " failed";
-            ROS_ERROR_STREAM(msg.c_str());
+            RCLCPP_ERROR(rclcpp::get_logger("data_preprocess"), "%s", msg.c_str());
             return;
         }
-        ROS_INFO("Loading the rosbag %s", bag_path.c_str());
+        file_.close();
         
-        rosbag::Bag bag;
+        RCLCPP_INFO(rclcpp::get_logger("data_preprocess"), "Loading the rosbag %s", bag_path.c_str());
+        
+        // ROS 2 rosbag reading
+        rosbag2_cpp::readers::SequentialReader reader;
+        rosbag2_storage::StorageOptions storage_options;
+        storage_options.uri = bag_path;
+        storage_options.storage_id = "sqlite3";
+
+        rosbag2_cpp::ConverterOptions converter_options;
+        converter_options.input_serialization_format = "cdr";
+        converter_options.output_serialization_format = "cdr";
+
         try {
-            bag.open(bag_path, rosbag::bagmode::Read);
-        } catch (rosbag::BagException &e) {
-            ROS_ERROR_STREAM("LOADING BAG FAILED: " << e.what());
+            reader.open(storage_options, converter_options);
+        } catch (const std::exception& e) {
+            RCLCPP_ERROR(rclcpp::get_logger("data_preprocess"), "LOADING BAG FAILED: %s", e.what());
             return;
         }
 
-        std::vector<string> lidar_topic_vec = {lidar_topic};
-        rosbag::View view(bag, rosbag::TopicQuery(lidar_topic_vec));
+        // Set topic filter
+        rosbag2_storage::StorageFilter filter;
+        filter.topics.push_back(lidar_topic);
+        reader.set_filter(filter);
 
-        for (const rosbag::MessageInstance &m : view) 
-        {
-            // Determine if the message is a Livox custom message
+        rclcpp::Serialization<sensor_msgs::msg::PointCloud2> pcl_serialization;
+        
+        while (reader.has_next()) {
+            auto bag_message = reader.read_next();
             
-            auto livox_custom_msg = m.instantiate<livox_ros_driver::CustomMsg>();
-            if (livox_custom_msg) 
-            {
-                // Handle Livox custom message
-                cloud_input_->reserve(livox_custom_msg->point_num);
-                for (uint i = 0; i < livox_custom_msg->point_num; ++i) 
-                {
-                    pcl::PointXYZ p;
-                    p.x = livox_custom_msg->points[i].x;
-                    p.y = livox_custom_msg->points[i].y;
-                    p.z = livox_custom_msg->points[i].z;
-                    cloud_input_->points.push_back(p);
-                }
-            }
-            else 
-            {
-                // Handle PCL format (Livox and Mechanical LiDAR)
-                auto pcl_msg = m.instantiate<sensor_msgs::PointCloud2>();
+            if (bag_message->topic_name == lidar_topic) {
+                // Handle standard PointCloud2 format
+                rclcpp::SerializedMessage serialized_msg(*bag_message->serialized_data);
+                sensor_msgs::msg::PointCloud2 pcl_msg;
+                pcl_serialization.deserialize_message(&serialized_msg, &pcl_msg);
+                
                 pcl::PointCloud<pcl::PointXYZ> temp_cloud;
-                pcl::fromROSMsg(*pcl_msg, temp_cloud);
+                pcl::fromROSMsg(pcl_msg, temp_cloud);
                 *cloud_input_ += temp_cloud;
-            } 
+            }
         }
-        ROS_INFO("Loaded %ld points from the rosbag.", cloud_input_->size()); 
+        
+        RCLCPP_INFO(rclcpp::get_logger("data_preprocess"), "Loaded %ld points from the rosbag.", cloud_input_->size()); 
     }
 };
 
