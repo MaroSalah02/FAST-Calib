@@ -28,8 +28,8 @@ fast_calib:
     z_max: 2.0
 
     lidar_topic: "/livox/points" # /ouster/points /livox/lidar
-    bag_path: "/home/parallels/bag_image/22"
-    image_path: "/home/parallels/bag_image/22.png"
+    bag_path: "/home/maro/Pictures/rosbag2_2025_07_11-21_17_03"
+    image_path: "/home/maro/Pictures/00.png"
 
     # Output
     output_path: "/home/parallels/bag_image/bag_images"

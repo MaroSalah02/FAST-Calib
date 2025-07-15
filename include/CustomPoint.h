@@ -8,7 +8,7 @@
 #include <cstdint>
 #include <memory>
 
-namespace livox_ros_driver
+namespace livox_ros_driver2  // Change from livox_ros_driver to livox_ros_driver2
 {
 namespace msg
 {
@@ -54,14 +54,10 @@ struct CustomPoint
   using ConstUniquePtr = std::unique_ptr<const CustomPoint>;
 
   // Message type info
-  static constexpr const char* MESSAGE_TYPE = "livox_ros_driver/msg/CustomPoint";
+  static constexpr const char* MESSAGE_TYPE = "livox_ros_driver2/msg/CustomPoint";
 };
 
-// Type aliases for convenience
-using CustomPointSharedPtr = std::shared_ptr<livox_ros_driver::msg::CustomPoint>;
-using CustomPointConstSharedPtr = std::shared_ptr<const livox_ros_driver::msg::CustomPoint>;
-
 } // namespace msg
-} // namespace livox_ros_driver
+} // namespace livox_ros_driver2
 
 #endif // LIVOX_ROS_DRIVER_MESSAGE_CUSTOMPOINT_H

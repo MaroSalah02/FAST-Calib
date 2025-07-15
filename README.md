@@ -38,9 +38,10 @@ ros2 launch fast_calib calib_launch.py
 
 1. Customize the calibration target in the image below.
 2. Record data to ros2 bag.
-3. Provide the instrinsic matrix in `qr_params.yaml`.
-4. Set distance filter in `qr_params.yaml` for board point cloud (extra points are acceptable).
-5. Calibrate now!
+3. if you are using livox ros driver2 make sure that output of your points in PointCloud2 format (edit the launch file of desired livox LiDAR and make sure that xfer_format = 0 )
+4. Provide the instrinsic matrix in `qr_params.yaml`.
+5. Set distance filter in `qr_params.yaml` for board point cloud (extra points are acceptable).
+6. Calibrate now!
 
 <p align="center">
   <img src="./pics/calibration_target.jpg" width="100%">

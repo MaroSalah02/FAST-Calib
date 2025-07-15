@@ -8,7 +8,7 @@ which is included as part of this source code package.
 #ifndef DATA_PREPROCESS_HPP
 #define DATA_PREPROCESS_HPP
 
-// #include "CustomMsg.h"  // Comment this out for now
+#include "CustomMsg.h"  // Uncomment this line
 #include <Eigen/Core>
 #include <pcl/io/pcd_io.h>
 #include <pcl/point_cloud.h>
@@ -75,29 +75,124 @@ public:
             return;
         }
 
+        // Check available topics and their types
+        auto topics = reader.get_all_topics_and_types();
+        bool topic_found = false;
+        std::string actual_topic_type;
+        
+        for (const auto& topic_info : topics) {
+            RCLCPP_INFO(rclcpp::get_logger("data_preprocess"), 
+                       "Available topic: %s, type: %s", 
+                       topic_info.name.c_str(), topic_info.type.c_str());
+            
+            if (topic_info.name == lidar_topic) {
+                actual_topic_type = topic_info.type;
+                topic_found = true;
+                break;
+            }
+        }
+        
+        if (!topic_found) {
+            RCLCPP_ERROR(rclcpp::get_logger("data_preprocess"), 
+                        "Topic %s not found in rosbag", lidar_topic.c_str());
+            return;
+        }
+
+        RCLCPP_INFO(rclcpp::get_logger("data_preprocess"), 
+                   "Found topic %s with type: %s", 
+                   lidar_topic.c_str(), actual_topic_type.c_str());
+
+        //  Not only point cloud2
+        // if (actual_topic_type != "sensor_msgs/msg/PointCloud2") {
+        //     RCLCPP_ERROR(rclcpp::get_logger("data_preprocess"), 
+        //                 "Expected sensor_msgs/msg/PointCloud2, but found: %s", 
+        //                 actual_topic_type.c_str());
+        //     return;
+        // }
+        
         // Set topic filter
         rosbag2_storage::StorageFilter filter;
         filter.topics.push_back(lidar_topic);
         reader.set_filter(filter);
 
-        rclcpp::Serialization<sensor_msgs::msg::PointCloud2> pcl_serialization;
+        int message_count = 0;
         
-        while (reader.has_next()) {
-            auto bag_message = reader.read_next();
+        if (actual_topic_type == "sensor_msgs/msg/PointCloud2") {
+            RCLCPP_INFO(rclcpp::get_logger("data_preprocess"), 
+                       "Processing standard PointCloud2 messages...");
+            // Handle standard PointCloud2 format
+            rclcpp::Serialization<sensor_msgs::msg::PointCloud2> pcl_serialization;
             
-            if (bag_message->topic_name == lidar_topic) {
-                // Handle standard PointCloud2 format
-                rclcpp::SerializedMessage serialized_msg(*bag_message->serialized_data);
-                sensor_msgs::msg::PointCloud2 pcl_msg;
-                pcl_serialization.deserialize_message(&serialized_msg, &pcl_msg);
+            while (reader.has_next()) {
+                auto bag_message = reader.read_next();
                 
-                pcl::PointCloud<pcl::PointXYZ> temp_cloud;
-                pcl::fromROSMsg(pcl_msg, temp_cloud);
-                *cloud_input_ += temp_cloud;
+                if (bag_message->topic_name == lidar_topic) {
+                    try {
+                        rclcpp::SerializedMessage serialized_msg(*bag_message->serialized_data);
+                        sensor_msgs::msg::PointCloud2 pcl_msg;
+                        pcl_serialization.deserialize_message(&serialized_msg, &pcl_msg);
+                        
+                        pcl::PointCloud<pcl::PointXYZ> temp_cloud;
+                        pcl::fromROSMsg(pcl_msg, temp_cloud);
+                        *cloud_input_ += temp_cloud;
+                        message_count++;
+                        
+                        if (message_count % 10 == 0) {
+                            RCLCPP_INFO(rclcpp::get_logger("data_preprocess"), 
+                                       "Processed %d messages, total points: %ld", 
+                                       message_count, cloud_input_->size());
+                        }
+                    } catch (const std::exception& e) {
+                        RCLCPP_ERROR(rclcpp::get_logger("data_preprocess"), 
+                                    "Error deserializing message %d: %s", message_count, e.what());
+                        continue;
+                    }
+                }
             }
+        } else if (actual_topic_type == "livox_ros_driver2/msg/CustomMsg") {
+            RCLCPP_INFO(rclcpp::get_logger("data_preprocess"), 
+                       "Processing Livox CustomMsg messages...");
+            
+            while (reader.has_next()) {
+                auto bag_message = reader.read_next();
+                
+                if (bag_message->topic_name == lidar_topic) {
+                    try {
+                        // Access the raw serialized data
+                        const auto& serialized_data = bag_message->serialized_data;
+                        
+                        // For now, let's try to convert this to a standard PointCloud2
+                        // This is a workaround - you might need to adjust based on your actual data
+                        
+                        // Skip this message for now and log that we found it
+                        message_count++;
+                        
+                        if (message_count % 10 == 0) {
+                            RCLCPP_INFO(rclcpp::get_logger("data_preprocess"), 
+                                       "Found %d CustomMsg messages (conversion not implemented yet)", 
+                                       message_count);
+                        }
+                    } catch (const std::exception& e) {
+                        RCLCPP_ERROR(rclcpp::get_logger("data_preprocess"), 
+                                    "Error processing CustomMsg %d: %s", message_count, e.what());
+                        continue;
+                    }
+                }
+            }
+        } else {
+            RCLCPP_ERROR(rclcpp::get_logger("data_preprocess"), 
+                        "Unsupported topic type: %s", actual_topic_type.c_str());
+            return;
         }
         
-        RCLCPP_INFO(rclcpp::get_logger("data_preprocess"), "Loaded %ld points from the rosbag.", cloud_input_->size()); 
+        RCLCPP_INFO(rclcpp::get_logger("data_preprocess"), 
+                   "Loaded %ld points from %d messages in the rosbag.", 
+                   cloud_input_->size(), message_count);
+                   
+        if (cloud_input_->size() == 0) {
+            RCLCPP_WARN(rclcpp::get_logger("data_preprocess"), 
+                       "No points loaded! Check your rosbag and topic configuration.");
+        }
     }
 };
 

@@ -8,8 +8,8 @@ which is included as part of this source code package.
 #ifndef QR_DETECT_HPP
 #define QR_DETECT_HPP
 
-#include <cv_bridge/cv_bridge.h>
-#include <image_geometry/pinhole_camera_model.h>
+#include <cv_bridge/cv_bridge.hpp>
+#include <image_geometry/pinhole_camera_model.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <opencv2/aruco.hpp>
 #include <opencv2/opencv.hpp>
@@ -99,7 +99,37 @@ class QRDetect
 
     void detect_qr(cv::Mat &image, pcl::PointCloud<pcl::PointXYZ>::Ptr centers_cloud) 
     {      
-      image.copyTo(imageCopy_);
+      // Convert image to proper format for ArUco detection
+      cv::Mat processedImage;
+      if (image.type() == CV_8UC1) {
+        processedImage = image;
+      } else if (image.type() == CV_8UC3) {
+        processedImage = image;
+      } else if (image.type() == CV_8UC4) {
+        cv::cvtColor(image, processedImage, cv::COLOR_BGRA2BGR);
+      } else {
+        // Convert to 8-bit format if needed
+        if (image.depth() != CV_8U) {
+          image.convertTo(processedImage, CV_8U);
+        } else {
+          processedImage = image;
+        }
+        
+        // Ensure it's either grayscale or 3-channel color
+        if (processedImage.channels() == 1) {
+          // Already grayscale, good to go
+        } else if (processedImage.channels() == 3) {
+          // Already 3-channel color, good to go
+        } else if (processedImage.channels() == 4) {
+          cv::cvtColor(processedImage, processedImage, cv::COLOR_BGRA2BGR);
+        } else {
+          RCLCPP_ERROR(node_->get_logger(), "Unsupported image format: %d channels, depth: %d", 
+                       processedImage.channels(), processedImage.depth());
+          return;
+        }
+      }
+
+      processedImage.copyTo(imageCopy_);
 
       // Create vector of markers corners. 4 markers * 4 corners
       // Markers order:
@@ -160,10 +190,10 @@ class QRDetect
       parameters->cornerRefinementMethod = cv::aruco::CORNER_REFINE_SUBPIX;
     #endif
 
-      // Detect markers
+      // Detect markers - use processedImage instead of image
       std::vector<int> ids;
       std::vector<std::vector<cv::Point2f>> corners;
-      cv::aruco::detectMarkers(image, dictionary_, corners, ids, parameters);
+      cv::aruco::detectMarkers(processedImage, dictionary_, corners, ids, parameters);
 
       // Draw detections if at least one marker detected
       if (ids.size() > 0) cv::aruco::drawDetectedMarkers(imageCopy_, corners, ids);
@@ -180,7 +210,7 @@ class QRDetect
 
         // Draw markers' axis and centers in color image
         for (size_t i = 0; i < ids.size(); i++) {
-          cv::aruco::drawAxis(imageCopy_, cameraMatrix_, distCoeffs_, rvecs[i],
+          cv::drawFrameAxes(imageCopy_, cameraMatrix_, distCoeffs_, rvecs[i],
                               tvecs[i], 0.1);
 
           // Accumulate pose for initial guess
@@ -214,7 +244,7 @@ class QRDetect
                                                 distCoeffs_, rvec, tvec, true);
     #endif
 
-        cv::aruco::drawAxis(imageCopy_, cameraMatrix_, distCoeffs_, rvec, tvec, 0.2);
+        cv::drawFrameAxes(imageCopy_, cameraMatrix_, distCoeffs_, rvec, tvec, 0.2);
 
         // Build transformation matrix to calibration target axis
         cv::Mat R(3, 3, cv::DataType<float>::type);
